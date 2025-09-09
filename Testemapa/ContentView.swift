@@ -11,7 +11,7 @@ struct ContentView: View {
     var body: some View {
         VStack {
             HeatmapResultView()
-                .rotationEffect(.degrees(180))
+//                .rotationEffect(.degrees(180))
         }
         .padding()
     }
