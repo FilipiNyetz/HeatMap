@@ -28,13 +28,13 @@ struct HeatmapResultView: View {
             // Overlay do heatmap (ocupa o mesmo frame do fundo)
             HeatmapView(
                 points: latestPoints,
-                worldBounds: debugSquare,
+//                worldBounds: debugSquare,
                 rotationDegrees: 220
             )
             .allowsHitTesting(false)
         }
         // Ajuste o frame conforme seu layout / imagem
-        .frame(width: 350, height: 200)
+        .frame(width: 280, height: 280)
         .onAppear {
             // Assina o publisher do WatchConnectivityManager
             subscription = WatchConnectivityManager.shared.workoutDataPublisher

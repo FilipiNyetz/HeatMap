@@ -7,7 +7,6 @@ import SwiftUI
 //- flipX/flipY: espelhamento opcional no mundo
 struct HeatmapView: View {
     let points: [CGPoint]
-    let worldBounds: CGRect
     var rotationDegrees: CGFloat = 0
     var flipX: Bool = false
     var flipY: Bool = false
@@ -17,8 +16,7 @@ struct HeatmapView: View {
     var body: some View {
         Canvas { context, size in
             // 1) Filtra pontos dentro do mundo ANTES de transformar (para manter coerência com bounds)
-            let inBounds = points.filter { worldBounds.contains($0) }
-            guard !inBounds.isEmpty else { return }
+            
 
             // 2) Rotação no PRÓPRIO EIXO (origem 0,0) + flips
             func rotateOrigin(_ p: CGPoint, deg: CGFloat) -> CGPoint {
@@ -33,30 +31,38 @@ struct HeatmapView: View {
                 CGPoint(x: flipX ? -p.x : p.x,
                         y: flipY ? -p.y : p.y)
             }
-            let transformed = inBounds.map { flip( rotateOrigin($0, deg: rotationDegrees) ) }
+            let transformed = points.map { flip(rotateOrigin($0, deg: rotationDegrees)) }
+//            let transformed = inBounds.map { flip( rotateOrigin($0, deg: rotationDegrees) ) }
 
             // 3) Clipa o desenho para o tamanho do canvas
             context.clip(to: Path(CGRect(origin: .zero, size: size)))
 
             // 4) Escala mundo → canvas (Y invertido para coordenada de tela)
-            let minX = worldBounds.minX, maxX = worldBounds.maxX
-            let minY = worldBounds.minY, maxY = worldBounds.maxY
-            let spanX = max(maxX - minX, 0.0001)
-            let spanY = max(maxY - minY, 0.0001)
+            let minX = points.map(\.x).min() ?? 0
+            let maxX = points.map(\.x).max() ?? 1
+            let minY = points.map(\.y).min() ?? 0
+            let maxY = points.map(\.y).max() ?? 1
+            
+            let spanX = max(maxX - minX, 0.00001)
+            let spanY = max(maxY - minY, 0.00001)
 
             func scalePoint(_ p: CGPoint) -> CGPoint {
+                print(minX)
+                print(maxX)
                 let nx = (p.x - minX) / spanX
                 let ny = (p.y - minY) / spanY
+                print("\(nx), \(ny)")
                 return CGPoint(x: nx * size.width, y: (1 - ny) * size.height)
             }
 
             // 5) Heatmap por grade + blur
             let cols = max(Int(size.width / idealCellSize), 1)
             let rows = max(Int(size.height / idealCellSize), 1)
-
+            
+            let canvasPoints = transformed.map { scalePoint($0) }
+            
             let result = HeatmapProcessor.process(
-                points: transformed,
-                worldBounds: worldBounds,
+                points: canvasPoints,
                 gridSize: (rows, cols)
             )
 
@@ -72,7 +78,7 @@ struct HeatmapView: View {
                             let value = result.grid[r][c]
                             if value == 0 { continue }
 
-                            let t = CGFloat(value) / CGFloat(result.maxValue)
+                            let t = (CGFloat(value) / CGFloat(result.maxValue))+0.05
 
                             // círculo maior que a célula para ficar orgânico
                             let center = CGPoint(x: (CGFloat(c) + 0.5) * cellW,
@@ -84,7 +90,7 @@ struct HeatmapView: View {
                                               height: 2 * radius)
 
                             layer.fill(Path(ellipseIn: rect),
-                                       with: .color(color(forIntensity: t).opacity(0.2)))
+                                       with: .color(color(forIntensity: t).opacity(0.4)))
                         }
                     }
                 }
@@ -93,11 +99,13 @@ struct HeatmapView: View {
     }
 
     private func color(forIntensity t: CGFloat) -> Color {
+        print(t)
         switch t {
-        case ..<0.75:  return .yellow
-        case ..<0.95: return .orange
+        case ..<0.25:  return .blue
+        case ..<0.4:   return .green
+        case ..<0.6:  return .yellow
+        case ..<0.75: return .orange
         default:      return .red
         }
     }
 }
- 

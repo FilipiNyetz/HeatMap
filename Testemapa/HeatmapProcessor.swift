@@ -17,7 +17,7 @@ struct HeatmapProcessor {
 
     // Processa pontos em uma grade, usando limites fixos (worldBounds).
     static func process(points: [CGPoint],
-                        worldBounds: CGRect,
+//                        worldBounds: CGRect,
                         gridSize: (rows: Int, cols: Int)) -> GridResult {
 
         let rows = max(gridSize.rows, 1)
@@ -26,12 +26,13 @@ struct HeatmapProcessor {
         var grid = Array(repeating: Array(repeating: 0, count: cols), count: rows)
         var maxValue = 0
 
-        let minX = worldBounds.minX
-        let maxX = worldBounds.maxX
-        let minY = worldBounds.minY
-        let maxY = worldBounds.maxY
-        let spanX = max(maxX - minX, 0.0001)
-        let spanY = max(maxY - minY, 0.0001)
+        let minX = points.map(\.x).min() ?? 0
+        let maxX = points.map(\.x).max() ?? 1
+        let minY = points.map(\.y).min() ?? 0
+        let maxY = points.map(\.y).max() ?? 1
+
+        let spanX = max(maxX - minX, 0.001)
+        let spanY = max(maxY - minY, 0.001)
 
         for p in points {
             // ignora pontos fora dos bounds

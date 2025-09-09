@@ -1,28 +1,23 @@
-//
-//  WatchConnectivityManager.swift
-//  Testemapa
-//
-//  Created by Joao pedro Leonel on 14/08/25.
-//
-
 import Foundation
 import WatchConnectivity
 import CoreGraphics
 import Combine
 
 // Singleton responsável por comunicação com o Apple Watch via WCSession.
-// Recebe pontos enviados pelo Watch e publica via Combine.
+// Recebe pontos enviados pelo Watch e acumula no histórico.
 final class WatchConnectivityManager: NSObject, WCSessionDelegate {
     
-    static let shared = WatchConnectivityManager() // Acesso global
+    static let shared = WatchConnectivityManager()
     
-    // Publisher que envia a lista de pontos (para Views assinarem)
+    // Mantém o histórico de pontos recebidos
+    @Published var allPoints: [CGPoint] = []
+    
+    // Publisher Combine exposto para as Views
     private let subject = PassthroughSubject<[CGPoint], Never>()
     var workoutDataPublisher: AnyPublisher<[CGPoint], Never> {
         subject.eraseToAnyPublisher()
     }
 
-    // Inicialização: ativa a sessão com o Watch
     private override init() {
         super.init()
         if WCSession.isSupported() {
@@ -31,31 +26,29 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate {
         }
     }
 
-    // ===== Métodos obrigatórios do protocolo WCSessionDelegate =====
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) { }
+    func session(_ session: WCSession,
+                 activationDidCompleteWith activationState: WCSessionActivationState,
+                 error: Error?) { }
 
     #if os(iOS)
     func sessionDidBecomeInactive(_ session: WCSession) { }
     func sessionDidDeactivate(_ session: WCSession) {
-        WCSession.default.activate() // Reativa ao trocar de Watch
+        WCSession.default.activate()
     }
     #endif
 
-    // Recebe dados enviados pelo Watch.
-    // Espera um dicionário com chave "workoutPath" contendo lista de {x, y}.
-    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any] = [:]) {
+    func session(_ session: WCSession,
+                 didReceiveUserInfo userInfo: [String : Any] = [:]) {
         guard let raw = userInfo["workoutPath"] as? [Any] else { return }
 
         var points: [CGPoint] = []
         points.reserveCapacity(raw.count)
 
-        // Converte cada item do array em CGPoint
         for item in raw {
             if let dict = item as? [String: Any] {
                 let xVal = dict["x"]
                 let yVal = dict["y"]
 
-                /// Helper: converte qualquer coisa em CGFloat
                 func toCGFloat(_ v: Any?) -> CGFloat? {
                     switch v {
                     case let n as NSNumber: return CGFloat(truncating: n)
@@ -64,15 +57,23 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate {
                     }
                 }
 
-                if let x = toCGFloat(xVal), let y = toCGFloat(yVal), x.isFinite, y.isFinite {
+                if let x = toCGFloat(xVal), let y = toCGFloat(yVal),
+                   x.isFinite, y.isFinite {
                     points.append(CGPoint(x: x, y: y))
                 }
             }
         }
 
-        // Publica pontos na main thread (UI segura)
-        DispatchQueue.main.async { [subject] in
-            subject.send(points)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 🔹 Acumula no histórico
+            self.allPoints.append(contentsOf: points)
+            
+            // 🔹 Publica o histórico completo para as views
+            self.subject.send(self.allPoints)
+            
+            print("📩 Recebido bloco com \(points.count) pontos. Total acumulado: \(self.allPoints.count)")
         }
     }
 }
